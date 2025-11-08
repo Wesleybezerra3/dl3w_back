@@ -1,4 +1,12 @@
 const {Adm} = require('../models');
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
+
+const generateToken = (user) => {
+  return jwt.sign({ id: user.id, matricula: user.matricula }, process.env.JWT_SECRET, {
+    expiresIn: "24h",
+  });
+};
 
 exports.login = async (req, res) => {
     const nome = req.body.nome;
@@ -6,7 +14,8 @@ exports.login = async (req, res) => {
     try {
         const admin = await Adm.findOne({ where: { nome: nome} });
         if (admin && admin.senha === senha) {
-            res.status(200).json({ message: 'Login successful', admin });
+            const token = generateToken(admin);
+            res.status(200).json({ message: 'Login successful', admin, token});
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -15,4 +24,18 @@ exports.login = async (req, res) => {
         res.status(500).json({ error: 'Erro ao buscar administrador' });
     }
 };
-""
+
+exports.me = async(req, res)=>{
+    try{
+        const admin = await Adm.findByPk(req.user.id);
+        if(admin){
+            res.status(200).json({admin});
+        }else{
+            res.status(404).json({message: 'Administrador não encontrado'});
+        }
+
+    }catch(error){
+        console.error('Erro ao buscar administrador:', error);
+        res.status(500).json({ error: 'Erro ao buscar administrador' });
+    }
+}

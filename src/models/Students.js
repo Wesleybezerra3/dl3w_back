@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
     },
     data_nascimento: {
-        type: DataTypes.Date,
+        type: DataTypes.DATE,
         allowNull: false,
     },
     cpf: {
@@ -26,11 +26,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
     },
     id_turma: {
-        type: DataTypes.int,
+        type: DataTypes.INTEGER,
         allowNull: false,
     },
   }, {
-    tableName: 'Alunos',
+    tableName: 'Aluno',
     timestamps: false,
   });       
     return Adm;

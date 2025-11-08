@@ -9,14 +9,40 @@ const db = {};
 fs.readdirSync(__dirname)
   .filter(file => file !== 'index.js' && file.endsWith('.js'))
   .forEach(file => {
-    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
-    db[model.name] = model;
+    const filePath = path.join(__dirname, file);
+    try {
+      const required = require(filePath);
+
+      // suporta: module.exports = (sequelize, DataTypes) => { ... }
+      // ou module.exports = ModelInstance (já criado)
+      // ou export default (transpilado)
+      let model;
+      if (typeof required === 'function') {
+        model = required(sequelize, Sequelize.DataTypes);
+      } else if (required && typeof required.default === 'function') {
+        model = required.default(sequelize, Sequelize.DataTypes);
+      } else if (required && required.name && required.findAll) {
+        // já é um model instanciado
+        model = required;
+      } else {
+        throw new Error(`Arquivo não exporta uma factory de model: ${file}`);
+      }
+
+      if (model && model.name) {
+        db[model.name] = model;
+      } else {
+        throw new Error(`Model inválido (sem name) gerado por: ${file}`);
+      }
+    } catch (err) {
+      console.error(`Erro ao carregar model "${file}": ${err.message}`);
+      // opcional: console.error(err);
+    }
   });
 
 // Executa associações se existirem
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
-    db[modelName].associate(db); // passa todos os models para o associate
+    db[modelName].associate(db);
   }
 });
 
