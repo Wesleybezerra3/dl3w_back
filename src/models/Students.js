@@ -1,5 +1,5 @@
 module.exports = (sequelize, DataTypes) => {
-  const Adm = sequelize.define('Students', {
+  const Aluno = sequelize.define('Aluno', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -26,12 +26,28 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
     },
     id_turma: {
-        type: DataTypes.INTEGER,
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'turma',
+        key: 'id'
+      }
+    },
+    matricula:{
+        type: DataTypes.STRING,
         allowNull: false,
+        unique: true,
+    },
+    situacao: {
+        type: DataTypes.STRING,
     },
   }, {
-    tableName: 'Aluno',
+    tableName: 'aluno',
     timestamps: false,
-  });       
-    return Adm;
+  });
+
+   Aluno.associate = (models) => {
+    Aluno.belongsTo(models.Turma, { foreignKey: 'id_turma' });
+  };
+    return Aluno;
 };
