@@ -2,6 +2,13 @@ const { Aluno } = require("../models");
 const { Turma } = require("../models");
 const { Curso } = require("../models");
 const generateInitialPassword = require("../utils/passwordInit");
+const jwt = require("jsonwebtoken");
+
+const generateToken = (user) => {
+  return jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+    expiresIn: "24h",
+  });
+};
 
 async function generateMatricula() {
   // Busca a maior matrícula já cadastrada
@@ -14,6 +21,44 @@ async function generateMatricula() {
   const lastMatricula = lastStudent ? parseInt(lastStudent.matricula, 10) : 0;
   return (lastMatricula + 1).toString().padStart(6, "0"); // Ex: '000001'
 }
+
+exports.login = async (req, res) => {
+  const { matricula, senha } = req.body;
+  try {
+    const student = await Aluno.findOne({ where: { matricula, senha } });
+    if (student) {
+      const token = generateToken(student);
+      res.status(200).json({ message: "Login realizado com sucesso", token });
+    } else {
+      res.status(401).json({ message: "Matrícula ou senha incorretos" });
+    }
+  } catch (error) {
+    console.error("Erro ao realizar login:", error);
+    res.status(500).json({ error: "Erro ao realizar login" });
+  }
+};
+
+exports.me = async (req, res) => {
+  try {
+    const user = await Aluno.findByPk(req.user.id, {
+      include: [
+        {
+          model: Turma,
+          as: "turma",
+          include: [Curso],
+        },
+      ],
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado!" });
+    }
+    return res.status(200).json(user);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Erro ao buscar usuário!" });
+  }
+};
 
 exports.createStudent = async (req, res) => {
   try {
@@ -66,6 +111,7 @@ exports.getStudentsAll = async (req, res) => {
     const students = await Aluno.findAll({
       include: {
         model: Turma,
+        as: "turma",
         include: Curso,
       },
     });

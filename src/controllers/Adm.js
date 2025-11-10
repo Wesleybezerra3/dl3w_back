@@ -3,19 +3,24 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const generateToken = (user) => {
-  return jwt.sign({ id: user.id, matricula: user.matricula }, process.env.JWT_SECRET, {
+  return jwt.sign({ id: user.id}, process.env.JWT_SECRET, {
     expiresIn: "24h",
   });
 };
 
 exports.login = async (req, res) => {
-    const nome = req.body.nome;
+    const nome = req.body.usuario;
     const senha = req.body.senha;
+    // Validação dos campos obrigatórios
+    if (!nome || !senha) {
+        return res.status(400).json({ message: 'Usuário e senha são obrigatórios.' });
+    }
+
     try {
         const admin = await Adm.findOne({ where: { nome: nome} });
         if (admin && admin.senha === senha) {
             const token = generateToken(admin);
-            res.status(200).json({ message: 'Login successful', admin, token});
+            res.status(200).json({ message: 'Login successful',token});
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
