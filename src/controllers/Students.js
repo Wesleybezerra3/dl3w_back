@@ -124,3 +124,24 @@ exports.getStudentsAll = async (req, res) => {
     res.status(500).json({ error: "Erro ao listar estudantes" });
   }
 };
+
+
+
+exports.definePassword = async (req, res) => {
+  try{
+  const { matricula, oldPassword ,newPassword } = req.body;
+  const student = await Aluno.findOne({ where: { matricula: matricula } });
+  if (!student) {
+    return res.status(404).json({ message: "Estudante não encontrado" });
+  }
+  if (student.senha !== oldPassword) {
+    return res.status(400).json({ message: "Senha anterior incorreta" });
+  }
+  student.senha = newPassword;
+  await student.save();
+  res.status(200).json({ message: "Senha atualizada com sucesso" });
+  }catch(error){
+    console.error("Erro ao definir senha:", error);
+    res.status(500).json({ error: "Erro ao definir senha" });
+  }
+}
