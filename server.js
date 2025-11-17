@@ -12,9 +12,9 @@ const roomsRoutes = require("./src/routes/Rooms");
 
 app.use(express.json());
 app.use(
-  cors({
-    origin: "*", // TEMPORÁRIO
-  })
+    cors({
+        origin: "*", // TEMPORÁRIO
+    })
 );
 
 app.use("/api/v1/adm", admRoutes);
@@ -24,6 +24,6 @@ app.use("/api/v1/cursos", courseRoutes);
 app.use("/api/v1/professores", teacherRoutes);
 app.use("/api/v1/salas", roomsRoutes);
 
-if (process.env.NODE_ENV !== "production") {
-  app.listen(8180, () => console.log("Rodando localmente"));
-}
+app.listen(8180, () => {
+    console.log("Server is running on port 8180");
+});
