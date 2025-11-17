@@ -21,8 +21,16 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Curso.associate = (models) => {
-    Curso.hasMany(models.Turma, { foreignKey: 'id_curso' });
-  };
+  Curso.hasMany(models.Turma, { foreignKey: 'id_curso', as: 'turmas' });
+
+  // Muitos-para-muitos com Disciplina
+  Curso.belongsToMany(models.Disciplina, {
+    through: 'curso_disciplina',
+    foreignKey: 'id_curso',
+    otherKey: 'id_disciplina',
+    as: 'disciplinas',
+  });
+};
 
   return Curso;
 };

@@ -1,6 +1,8 @@
 const { Aluno } = require("../models");
 const { Turma } = require("../models");
 const { Curso } = require("../models");
+const {Professor} = require("../models");
+const { Disciplina } = require("../models");
 const generateInitialPassword = require("../utils/passwordInit");
 const jwt = require("jsonwebtoken");
 
@@ -40,12 +42,54 @@ exports.login = async (req, res) => {
 
 exports.me = async (req, res) => {
   try {
+    // const user = await Aluno.findByPk(req.user.id, {
+    //   include: [
+    //    {
+    //       model: Turma,
+    //       as: "turma",
+    //       include: [
+    //         {
+    //           model: Curso,
+    //           as: "curso",
+    //         }
+    //       ]
+    //     }
+    //   ],
+    // });
+
     const user = await Aluno.findByPk(req.user.id, {
       include: [
         {
           model: Turma,
           as: "turma",
-          include: [Curso],
+          attributes: ["id", "nome", "turno", "semestre"],
+
+          include: [
+            {
+              model: Curso,
+              as: "curso",
+              attributes: ["id", "nome", "duracao_meses"],
+
+              include: [
+                {
+                  model: Disciplina,
+                  as: "disciplinas", // M-N entre curso e disciplina
+                  attributes: ["id", "nome", "carga_horaria","modalidade"],
+
+                  through: { attributes: [] }, // remove tabela pivot da resposta
+
+                  include: [
+                    {
+                      model: Professor,
+                      as: "professores", // M-N entre disciplina e professor
+                      attributes: ["id", "nome", "titulacao"],
+                      through: { attributes: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         },
       ],
     });
@@ -62,8 +106,8 @@ exports.me = async (req, res) => {
 
 exports.createStudent = async (req, res) => {
   try {
-    const { nome, cpf, data_nascimento, email } = req.body;
-    let id_turma = 9;
+    const { nome, cpf, data_nascimento, email, turma } = req.body;
+    const id_turma = turma;
     const senha = generateInitialPassword();
     const matricula = await generateMatricula();
 
@@ -109,11 +153,18 @@ exports.getStudentByMatricula = async (req, res) => {
 exports.getStudentsAll = async (req, res) => {
   try {
     const students = await Aluno.findAll({
-      include: {
-        model: Turma,
-        as: "turma",
-        include: Curso,
-      },
+      include: [
+        {
+          model: Turma,
+          as: "turma",
+          include: [
+            {
+              model: Curso,
+              as: "curso",
+            },
+          ],
+        },
+      ],
     });
     if (!students || students.length === 0) {
       return res.status(404).json({ message: "Nenhum estudante encontrado" });
@@ -125,23 +176,21 @@ exports.getStudentsAll = async (req, res) => {
   }
 };
 
-
-
 exports.definePassword = async (req, res) => {
-  try{
-  const { matricula, oldPassword ,newPassword } = req.body;
-  const student = await Aluno.findOne({ where: { matricula: matricula } });
-  if (!student) {
-    return res.status(404).json({ message: "Estudante não encontrado" });
-  }
-  if (student.senha !== oldPassword) {
-    return res.status(400).json({ message: "Senha anterior incorreta" });
-  }
-  student.senha = newPassword;
-  await student.save();
-  res.status(200).json({ message: "Senha atualizada com sucesso" });
-  }catch(error){
+  try {
+    const { matricula, oldPassword, newPassword } = req.body;
+    const student = await Aluno.findOne({ where: { matricula: matricula } });
+    if (!student) {
+      return res.status(404).json({ message: "Estudante não encontrado" });
+    }
+    if (student.senha !== oldPassword) {
+      return res.status(400).json({ message: "Senha anterior incorreta" });
+    }
+    student.senha = newPassword;
+    await student.save();
+    res.status(200).json({ message: "Senha atualizada com sucesso" });
+  } catch (error) {
     console.error("Erro ao definir senha:", error);
     res.status(500).json({ error: "Erro ao definir senha" });
   }
-}
+};

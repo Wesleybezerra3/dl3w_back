@@ -29,9 +29,10 @@ module.exports = (sequelize, DataTypes) => {
     timestamps: false,
   });       
 
-   Turma.associate = (models) => {
-    Turma.belongsTo(models.Curso, { foreignKey: 'id_curso' });
-    Turma.hasMany(models.Aluno, { foreignKey: 'id_turma' });
+    Turma.associate = (models) => {
+    Turma.belongsTo(models.Curso, { foreignKey: 'id_curso', as: 'curso' });
+    Turma.belongsTo(models.Sala, { foreignKey: 'id_sala', as: 'sala' });
+    Turma.hasMany(models.Aluno, { foreignKey: 'id_turma', as: 'alunos' });
   };
     return Turma;
 };
