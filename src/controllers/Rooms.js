@@ -23,6 +23,33 @@ exports.getAllRooms = async (req, res) => {
   }
 };
 
+exports.createRoom = async (req, res) => {
+  try {
+    const { nome, capacidade, localizacao } = req.body;
+
+    if (!nome || capacidade == null || !localizacao) {
+      console.log(nome,capacidade,localizacao)
+      return res.status(400).json({ message: "Campos obrigatórios: nome, capacidade, localizacao" });
+    }
+
+    const capacidadeNum = parseInt(capacidade, 10);
+    if (Number.isNaN(capacidadeNum) || capacidadeNum <= 0) {
+      return res.status(400).json({ message: "Capacidade deve ser um número inteiro positivo" });
+    }
+
+    const novaSala = await Sala.create({
+      nome,
+      capacidade: capacidadeNum,
+      localizacao,
+    });
+
+    return res.status(201).json(novaSala);
+  } catch (error) {
+    console.error("Erro ao criar sala:", error);
+    return res.status(500).json({ error: "Erro ao criar sala" });
+  }
+};
+
 // exports.getClassesAll = async (req, res) => {
 //   try {
 //     const classes = await Turma.findAll({
