@@ -275,3 +275,35 @@ exports.updateStudent = async(req, res) => {
         return res.status(500).json({ message: "Erro ao atualizar estudante" });
     }
 };
+
+
+//Ações adm
+
+exports.changeClass = async (req, res) => {
+    try {
+        const { matricula, id_turma } = req.body;
+
+        if (!matricula || !id_turma) {
+            return res.status(400).json({ message: "Matrícula e nova turma são obrigatórias." });
+        }
+
+        const student = await Aluno.findOne({ where: { matricula } });
+        if (!student) {
+            return res.status(404).json({ message: "Aluno não encontrado" });
+        }
+
+        const turma = await Turma.findByPk(id_turma);
+        if (!turma) {
+            return res.status(400).json({ message: "Turma informada não existe" });
+        }
+
+        student.id_turma = id_turma;
+        await student.save();
+
+        return res.status(200).json({ message: "Turma alterada com sucesso", student });
+
+    } catch (error) {
+        console.error("Erro ao mudar turma:", error);
+        res.status(500).json({ message: "Erro interno ao mudar turma" });
+    }
+};

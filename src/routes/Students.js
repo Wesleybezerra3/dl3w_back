@@ -11,6 +11,10 @@ router.post('/definir-senha', definePasswordMiddleware, controllersStudents.defi
 router.get('/me', authMiddleware, controllersStudents.me);
 router.put('/', controllersStudents.updateStudent);
 
+//Ações
+
+router.put("/change-class", controllersStudents.changeClass);
+
 
 
 module.exports = router;
