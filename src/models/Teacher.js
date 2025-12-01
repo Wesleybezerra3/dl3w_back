@@ -56,6 +56,7 @@ module.exports = (sequelize, DataTypes) => {
     // Relacionamento M:N com disciplina
     Professor.belongsToMany(models.Disciplina, {
       through: "professor_disciplina",
+      timestamps: false,
       as: "disciplinas",
       foreignKey: "id_professor",
       otherKey: "id_disciplina",

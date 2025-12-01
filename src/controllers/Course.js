@@ -1,4 +1,4 @@
-const { Curso, Turma, Aluno } = require("../models");
+const { Curso, Turma, Aluno, Disciplina } = require("../models");
 const { fn, col, literal } = require("sequelize");
 
 exports.getStudentsByCourse = async (req, res) => {
@@ -30,28 +30,34 @@ exports.getStudentsByCourse = async (req, res) => {
 
     return res.status(200).json(cursos);
   } catch (error) {
-    console.log(error)
-    return res
-      .status(500)
-      .json({
-        message: "Erro ao buscar alunos por curso.",
-        error: error.message,
-      });
+    console.log(error);
+    return res.status(500).json({
+      message: "Erro ao buscar alunos por curso.",
+      error: error.message,
+    });
   }
 };
 exports.getAllCourse = async (req, res) => {
-    try{
-        // Buscar todos os professores com suas disciplinas
-        const cursos = await Curso.findAll();
-        if (cursos.length === 0) {
-            return res.status(404).json({ message: "Nenhum curso encontrado" });
-        }
-        // Retornar a lista de professores
-
-        res.status(200).json(cursos);
-
-    }catch(error) {
-        console.error("Erro ao buscar cursos:", error);
-        res.status(500).json({ message: "Erro ao buscar cursos" });
+  try {
+    // Buscar todos os professores com suas disciplinas
+    const cursos = await Curso.findAll({
+      include: [
+        {
+          model: Disciplina,
+          as: "disciplinas",
+          attributes: ["id", "nome", "carga_horaria"],
+          through: { attributes: [] }, 
+        },
+      ],
+    });
+    if (cursos.length === 0) {
+      return res.status(404).json({ message: "Nenhum curso encontrado" });
     }
-}
+    // Retornar a lista de professores
+
+    res.status(200).json(cursos);
+  } catch (error) {
+    console.error("Erro ao buscar cursos:", error);
+    res.status(500).json({ message: "Erro ao buscar cursos" });
+  }
+};

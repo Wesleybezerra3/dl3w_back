@@ -26,7 +26,7 @@ module.exports = (sequelize, DataTypes) => {
   Sala.associate = (models) => {
     Sala.hasMany(models.Turma, {
       foreignKey: 'id_sala',
-      as: 'turmas',
+      as: 'turma',
     });
   };
 

@@ -18,7 +18,7 @@ exports.getAllRooms = async(req, res) => {
             attributes: ["id", "nome", "capacidade", "localizacao"],
             include: [{
                 model: Turma,
-                as: 'turmas'
+                as: 'turma'
             }],
             limit: Number(limit),
             offset: Number(offset)
@@ -98,6 +98,64 @@ exports.searchRooms = async(req, res) => {
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: "Erro ao buscar salas!" });
+    }
+};
+
+exports.getByName = async (req, res) => {
+  const name = req.query.name;
+  try {
+    const sala = await Sala.findOne({
+      where: { nome:name },
+      include: [
+        {
+          model: Turma,
+          as: "turma",
+          attributes: [],
+        },
+      ],
+    });
+    if (sala) {
+      res.status(200).json(sala);
+    } else {
+      res.status(404).json({ message: "Sala não encontrado" });
+    }
+  } catch (error) {
+    console.error("Erro ao buscar sala:", error);
+    res.status(500).json({ message: "Erro ao buscar Sala" });
+  }
+};
+
+exports.updateRoom = async(req, res) => {
+    try {
+        const { id } = req.query;
+        const { nome, localizacao,capacidade} = req.body;
+
+        if (!id) {
+            return res.status(400).json({ message: "id não informada" });
+        }
+
+        // Busca o estudante pela matrícula
+        const sala = await Sala.findOne({ where: { id } });
+
+        if (!sala) {
+            return res.status(404).json({ message: "Estudante não encontrado" });
+        }
+
+        // Atualizações básicas
+        if (nome) sala.nome = nome;
+        if (localizacao) sala.localizacao = localizacao;
+        if (capacidade) sala.capacidade = capacidade;
+
+        await sala.save();
+
+        return res.status(200).json({
+            message: "Dados atualizados com sucesso",
+            sala
+        });
+
+    } catch (error) {
+        console.error("Erro ao atualizar da sala:", error);
+        return res.status(500).json({ message: "Erro ao atualizar sala" });
     }
 };
 

@@ -20,9 +20,9 @@ exports.login = async (req, res) => {
         const admin = await Adm.findOne({ where: { nome: nome} });
         if (admin && admin.senha === senha) {
             const token = generateToken(admin);
-            res.status(200).json({ message: 'Login successful',token});
+            res.status(200).json({ message: 'Login realizado com sucesso',token});
         } else {
-            res.status(401).json({ message: 'Invalid credentials' });
+            res.status(401).json({ message: 'Credenciais invalidas' });
         }
     } catch (error) {
         console.error('Erro ao buscar administrador:', error);

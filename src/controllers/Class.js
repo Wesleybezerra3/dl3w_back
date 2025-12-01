@@ -56,3 +56,34 @@ exports.getClassesAll = async(req, res) => {
         res.status(500).json({ error: "Erro ao listar turmas" });
     }
 };
+
+exports.getTurmasByCurso = async (req, res) => {
+    try {
+        const { id } = req.query; // id do curso
+
+        if (!id) {
+            return res.status(400).json({ message: "ID do curso é obrigatório." });
+        }
+
+        const turmas = await Turma.findAll({
+            where: { id_curso: id },
+            include: [
+                {
+                    model: Curso,
+                    as: "curso",
+                    attributes: ["id", "nome"]
+                }
+            ]
+        });
+
+        if (!turmas || turmas.length === 0) {
+            return res.status(404).json({ message: "Nenhuma turma encontrada para este curso." });
+        }
+
+        return res.status(200).json(turmas);
+
+    } catch (error) {
+        console.error("Erro ao buscar turmas por curso:", error);
+        return res.status(500).json({ message: "Erro interno ao buscar turmas por curso." });
+    }
+};
