@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const controllersStudents = require('../controllers/Students');
 const { authMiddleware, definePasswordMiddleware } = require('../middleware/Students');
+const validateIdentity = require('../middleware/Validate')
 
-router.post('/', controllersStudents.createStudent);
+router.post('/', validateIdentity, controllersStudents.createStudent);
 router.get('/', controllersStudents.getStudentsAll);
 router.get('/getByMatricula', controllersStudents.getStudentByMatricula)
 router.get('/search', controllersStudents.searchStudent)
