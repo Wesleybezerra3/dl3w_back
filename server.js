@@ -13,11 +13,11 @@ const reportsRoutes = require("./src/routes/Reports");
 const disciplinesRoutes = require("./src/routes/Discipline");
 
 app.use(express.json());
-app.use(
-    cors({
-        origin: "*", // TEMPORÁRIO
-    })
-);
+
+app.use(cors({
+    origin: ["*", "http://localhost:5173", "https://dl3w-back.onrender.com"],
+}));
+
 
 app.use("/api/v1/adm", admRoutes);
 app.use("/api/v1/alunos", studentsRoutes);
@@ -28,6 +28,8 @@ app.use("/api/v1/professores", teacherRoutes);
 app.use("/api/v1/salas", roomsRoutes);
 app.use("/api/v1/disciplinas", disciplinesRoutes);
 
-app.listen(8180, () => {
-    console.log("Server is running on port 8180");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+    console.log("Server rodando na porta " + PORT);
 });
