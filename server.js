@@ -15,7 +15,7 @@ const disciplinesRoutes = require("./src/routes/Discipline");
 app.use(express.json());
 
 app.use(cors({
-    origin: ["*", "http://localhost:5173", "https://dl3w-6qpm.vercel.app/"],
+    origin: ["*", "http://localhost:5173", "https://dl3w-6qpm.vercel.app"],
 }));
 
 
