@@ -101,34 +101,31 @@ exports.searchRooms = async(req, res) => {
     }
 };
 
-exports.getByName = async (req, res) => {
-  const name = req.query.name;
-  try {
-    const sala = await Sala.findOne({
-      where: { nome:name },
-      include: [
-        {
-          model: Turma,
-          as: "turma",
-          attributes: [],
-        },
-      ],
-    });
-    if (sala) {
-      res.status(200).json(sala);
-    } else {
-      res.status(404).json({ message: "Sala não encontrado" });
+exports.getByName = async(req, res) => {
+    const name = req.query.name;
+    try {
+        const sala = await Sala.findOne({
+            where: { nome: name },
+            include: [{
+                model: Turma,
+                as: "turma",
+            }, ],
+        });
+        if (sala) {
+            res.status(200).json(sala);
+        } else {
+            res.status(404).json({ message: "Sala não encontrado" });
+        }
+    } catch (error) {
+        console.error("Erro ao buscar sala:", error);
+        res.status(500).json({ message: "Erro ao buscar Sala" });
     }
-  } catch (error) {
-    console.error("Erro ao buscar sala:", error);
-    res.status(500).json({ message: "Erro ao buscar Sala" });
-  }
 };
 
 exports.updateRoom = async(req, res) => {
     try {
         const { id } = req.query;
-        const { nome, localizacao,capacidade} = req.body;
+        const { nome, localizacao, capacidade } = req.body;
 
         if (!id) {
             return res.status(400).json({ message: "id não informada" });
