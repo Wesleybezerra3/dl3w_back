@@ -1,9 +1,6 @@
 const { Aluno } = require("../models");
 const { Turma } = require("../models");
 const { Curso } = require("../models");
-const { Professor } = require("../models");
-const { Disciplina } = require("../models");
-const { where, Op } = require("sequelize");
 
 const generateInitialPassword = require("../utils/passwordInit");
 const jwt = require("jsonwebtoken");
@@ -14,14 +11,46 @@ const generateToken = (user) => {
     });
 };
 
+const studentClassInclude = {
+    turma: {
+        include: {
+            curso: {
+                include: {
+                    disciplinas: {
+                        select: {
+                            disciplina: {
+                                include: {
+                                    professores: {
+                                        select: {
+                                            professor: {
+                                                select: { id: true, nome: true, titulacao: true },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+};
+
+const formatStudentClass = (student) => {
+    if (!student.turma?.curso) return student;
+
+    student.turma.curso.disciplinas = student.turma.curso.disciplinas.map(({ disciplina }) => ({
+        ...disciplina,
+        professores: disciplina.professores.map(({ professor }) => professor),
+    }));
+
+    return student;
+};
+
 async function generateMatricula() {
     // Busca a maior matrícula já cadastrada
-    const lastStudent = await Aluno.findOne({
-        order: [
-            ["matricula", "DESC"]
-        ],
-        attributes: ["matricula"],
-    });
+    const lastStudent = await Aluno.findFirst({ orderBy: { matricula: "desc" }, select: { matricula: true } });
 
     // Se não existe nenhum aluno, começa em 1
     const lastMatricula = lastStudent ? parseInt(lastStudent.matricula, 10) : 0;
@@ -31,7 +60,7 @@ async function generateMatricula() {
 exports.login = async(req, res) => {
     const { matricula, senha } = req.body;
     try {
-        const student = await Aluno.findOne({ where: { matricula, senha } });
+        const student = await Aluno.findFirst({ where: { matricula, senha } });
         if(student?.situacao === 'Inativo'){
             res.status(401).json({message:'Aluno inativo, não autorizado'})
         }
@@ -49,54 +78,15 @@ exports.login = async(req, res) => {
 
 exports.me = async(req, res) => {
     try {
-        // const user = await Aluno.findByPk(req.user.id, {
-        //   include: [
-        //    {
-        //       model: Turma,
-        //       as: "turma",
-        //       include: [
-        //         {
-        //           model: Curso,
-        //           as: "curso",
-        //         }
-        //       ]
-        //     }
-        //   ],
-        // });
-
-        const user = await Aluno.findByPk(req.user.id, {
-            include: [{
-                model: Turma,
-                as: "turma",
-                attributes: ["id", "nome", "turno", "semestre"],
-
-                include: [{
-                    model: Curso,
-                    as: "curso",
-                    attributes: ["id", "nome", "duracao_meses"],
-
-                    include: [{
-                        model: Disciplina,
-                        as: "disciplinas", // M-N entre curso e disciplina
-                        attributes: ["id", "nome", "carga_horaria", "modalidade"],
-
-                        through: { attributes: [] }, // remove tabela pivot da resposta
-
-                        include: [{
-                            model: Professor,
-                            as: "professores", // M-N entre disciplina e professor
-                            attributes: ["id", "nome", "titulacao"],
-                            through: { attributes: [] },
-                        }, ],
-                    }, ],
-                }, ],
-            }, ],
+        const user = await Aluno.findUnique({
+            where: { id: Number(req.user.id) },
+            include: studentClassInclude,
         });
 
         if (!user) {
             return res.status(404).json({ message: "Usuário não encontrado!" });
         }
-        return res.status(200).json(user);
+        return res.status(200).json(formatStudentClass(user));
     } catch (err) {
         console.error(err);
         return res.status(500).json({ message: "Erro ao buscar usuário!" });
@@ -110,7 +100,7 @@ exports.createStudent = async(req, res) => {
         const senha = generateInitialPassword();
         const matricula = await generateMatricula();
 
-        const exists = await Aluno.findOne({ where: { matricula } });
+        const exists = await Aluno.findFirst({ where: { matricula } });
         if (exists) {
             return res
                 .status(400)
@@ -121,9 +111,9 @@ exports.createStudent = async(req, res) => {
             nome,
             senha,
             cpf,
-            data_nascimento,
+            dataNascimento: new Date(data_nascimento),
             email,
-            id_turma,
+            idTurma: id_turma ? Number(id_turma) : null,
             matricula,
             situacao: "ativo",
         });
@@ -137,37 +127,12 @@ exports.createStudent = async(req, res) => {
 exports.getStudentByMatricula = async(req, res) => {
     const matricula = req.query.matricula;
     try {
-        const student = await Aluno.findOne({
+        const student = await Aluno.findFirst({
             where: { matricula: matricula },
-            include: [{
-                model: Turma,
-                as: "turma",
-                attributes: ["id", "nome", "turno", "semestre"],
-
-                include: [{
-                    model: Curso,
-                    as: "curso",
-                    attributes: ["id", "nome", "duracao_meses"],
-
-                    include: [{
-                        model: Disciplina,
-                        as: "disciplinas", // M-N entre curso e disciplina
-                        attributes: ["id", "nome", "carga_horaria", "modalidade"],
-
-                        through: { attributes: [] }, // remove tabela pivot da resposta
-
-                        include: [{
-                            model: Professor,
-                            as: "professores", // M-N entre disciplina e professor
-                            attributes: ["id", "nome", "titulacao"],
-                            through: { attributes: [] },
-                        }, ],
-                    }, ],
-                }, ],
-            }, ],
+            include: studentClassInclude,
         });
         if (student) {
-            res.status(200).json(student);
+            res.status(200).json(formatStudentClass(student));
         } else {
             res.status(404).json({ message: "Estudante não encontrado" });
         }
@@ -188,27 +153,20 @@ exports.getStudentsAll = async(req, res) => {
             offset = (page - 1) * limit;
         }
 
-        const students = await Aluno.findAll({
-            include: [{
-                model: Turma,
-                as: "turma",
-                include: [{
-                    model: Curso,
-                    as: "curso",
-                }, ],
-            }, ],
-            limit: Number(limit),
-            offset: Number(offset),
+        const students = await Aluno.findMany({
+            include: { turma: { include: { curso: true } } },
+            take: Number(limit),
+            skip: Number(offset),
         });
 
-        const totalStudents = await Aluno.findAll();
+        const totalStudents = await Aluno.count();
 
         if (!students || students.length === 0) {
             return res.status(404).json({ message: "Nenhum estudante encontrado" });
         }
         res.status(200).json({
             students,
-            totalStudents: totalStudents.length,
+            totalStudents,
         });
     } catch (error) {
         console.error("Erro ao listar estudantes:", error);
@@ -224,14 +182,13 @@ exports.searchStudent = async(req, res) => {
 
         // Se o título não for fornecido, retorna todos os salas
         if (!studentName) {
-            alunos = await Sala.findAll();
             return res.status(404).json({ message: 'O nome não foi fornecido' });
         } else {
             // Busca salas cujo título contém a string especificada
-            alunos = await Aluno.findAll({
+            alunos = await Aluno.findMany({
                 where: {
                     nome: {
-                        [Op.like]: `%${studentName}%`, // Filtro "contém" com wildcard (%)
+                        contains: studentName,
                     },
                 },
             });
@@ -242,7 +199,7 @@ exports.searchStudent = async(req, res) => {
         }
 
         // Converte os resultados em objetos simples
-        const alunosData = alunos.map((aluno) => aluno.get({ plain: true }));
+        const alunosData = alunos;
 
         return res.status(200).json(alunosData);
     } catch (err) {
@@ -254,15 +211,14 @@ exports.searchStudent = async(req, res) => {
 exports.definePassword = async(req, res) => {
     try {
         const { matricula, oldPassword, newPassword } = req.body;
-        const student = await Aluno.findOne({ where: { matricula: matricula } });
+        const student = await Aluno.findFirst({ where: { matricula: matricula } });
         if (!student) {
             return res.status(404).json({ message: "Estudante não encontrado" });
         }
         if (student.senha !== oldPassword) {
             return res.status(400).json({ message: "Senha anterior incorreta" });
         }
-        student.senha = newPassword;
-        await student.save();
+        await Aluno.update({ where: { matricula }, data: { senha: newPassword } });
         res.status(200).json({ message: "Senha atualizada com sucesso" });
     } catch (error) {
         console.error("Erro ao definir senha:", error);
@@ -281,7 +237,7 @@ exports.updateStudent = async(req, res) => {
         }
 
         // Busca o estudante pela matrícula
-        const student = await Aluno.findOne({ where: { matricula } });
+        const student = await Aluno.findFirst({ where: { matricula } });
 
         if (!student) {
             return res.status(404).json({ message: "Estudante não encontrado" });
@@ -295,7 +251,7 @@ exports.updateStudent = async(req, res) => {
 
         // Troca de turma
         if (id_turma) {
-            const turma = await Turma.findByPk(id_turma);
+            const turma = await Turma.findUnique({ where: { id: Number(id_turma) } });
             if (!turma) {
                 return res.status(400).json({ message: "Turma informada não existe" });
             }
@@ -303,7 +259,7 @@ exports.updateStudent = async(req, res) => {
             student.id_turma = id_turma;
         }
 
-        await student.save();
+        await Aluno.update({ where: { matricula }, data: { senha: student.senha, nome: student.nome, cpf: student.cpf, dataNascimento: student.dataNascimento, email: student.email, idTurma: student.idTurma, situacao: student.situacao } });
 
         return res.status(200).json({
             message: "Dados atualizados com sucesso",
@@ -327,18 +283,18 @@ exports.changeClass = async (req, res) => {
             return res.status(400).json({ message: "Matrícula e nova turma obrigatórias." });
         }
 
-        const student = await Aluno.findOne({ where: { matricula } });
+        const student = await Aluno.findFirst({ where: { matricula } });
         if (!student) {
             return res.status(404).json({ message: "Aluno não encontrado" });
         }
 
-        const turma = await Turma.findByPk(id_turma);
+        const turma = await Turma.findUnique({ where: { id: Number(id_turma) } });
         if (!turma) {
             return res.status(400).json({ message: "Turma informada não existe" });
         }
 
         student.id_turma = id_turma;
-        await student.save();
+        await Aluno.update({ where: { matricula }, data: { idTurma: Number(id_turma) } });
 
         return res.status(200).json({ message: "Turma alterada com sucesso", student });
 
@@ -356,21 +312,18 @@ exports.changeCourse = async (req, res) => {
             return res.status(400).json({ message: "Matrícula e novo curso são obrigatórios." });
         }
 
-        const student = await Aluno.findOne({ where: { matricula } });
+        const student = await Aluno.findFirst({ where: { matricula } });
         if (!student) {
             return res.status(404).json({ message: "Aluno não encontrado" });
         }
 
-        const curso = await Curso.findByPk(id_curso);
+        const curso = await Curso.findUnique({ where: { id: Number(id_curso) } });
         if (!curso) {
             return res.status(400).json({ message: "Curso informado não existe" });
         }
 
         // Buscar turmas do curso
-        const turmas = await Turma.findAll({
-            where: { id_curso },
-            order: [["semestre", "ASC"]] // opcional: pega a turma mais básica
-        });
+        const turmas = await Turma.findMany({ where: { idCurso: Number(id_curso) }, orderBy: { semestre: "asc" } });
 
         if (turmas.length === 0) {
             return res.status(400).json({
@@ -385,7 +338,7 @@ exports.changeCourse = async (req, res) => {
         student.id_curso = id_curso;
         student.id_turma = novaTurma.id;
 
-        await student.save();
+        await Aluno.update({ where: { matricula }, data: { idTurma: novaTurma.id } });
 
         return res.status(200).json({
             message: `Curso alterado com sucesso!`,
@@ -407,14 +360,14 @@ exports.changeStatus = async (req, res) => {
             return res.status(400).json({ message: "Matrícula e nova situação obrigatórios." });
         }
 
-        const student = await Aluno.findOne({ where: { matricula } });
+        const student = await Aluno.findFirst({ where: { matricula } });
 
         if (!student) {
             return res.status(404).json({ message: "Aluno não encontrado" });
         }
 
         student.situacao = situacao;
-        await student.save();
+        await Aluno.update({ where: { matricula }, data: { situacao } });
 
         return res.status(200).json({
             message: "Situação atualizada com sucesso",
@@ -435,7 +388,7 @@ exports.resetPassword = async (req, res) => {
             return res.status(400).json({ message: "Matrícula é obrigatória." });
         }
 
-        const student = await Aluno.findOne({ where: { matricula } });
+        const student = await Aluno.findFirst({ where: { matricula } });
 
         if (!student) {
             return res.status(404).json({ message: "Aluno não encontrado" });
@@ -446,7 +399,7 @@ exports.resetPassword = async (req, res) => {
 
         // Atualiza no banco
         student.senha = newPassword;
-        await student.save();
+        await Aluno.update({ where: { matricula }, data: { senha: newPassword } });
 
         return res.status(200).json({
             message: "Senha redefinida com sucesso",
@@ -463,16 +416,10 @@ exports.resetPassword = async (req, res) => {
 
 exports.getStudentsActive = async (req, res) => {
     try {
-        const students = await Aluno.findAll({
+        const students = await Aluno.findMany({
             where: { situacao: "ativo" },
-            include: [
-                {
-                    model: Turma,
-                    as: "turma",
-                    include: [{ model: Curso, as: "curso" }]
-                }
-            ],
-            order: [["nome", "ASC"]]
+            include: { turma: { include: { curso: true } } },
+            orderBy: { nome: "asc" },
         });
 
         return res.status(200).json({ students });
@@ -483,16 +430,10 @@ exports.getStudentsActive = async (req, res) => {
 };
 exports.getStudentsInactive = async (req, res) => {
     try {
-        const students = await Aluno.findAll({
+        const students = await Aluno.findMany({
             where: { situacao: "inativo" },
-            include: [
-                {
-                    model: Turma,
-                    as: "turma",
-                    include: [{ model: Curso, as: "curso" }]
-                }
-            ],
-            order: [["nome", "ASC"]]
+            include: { turma: { include: { curso: true } } },
+            orderBy: { nome: "asc" },
         });
 
         return res.status(200).json({ students });
@@ -504,26 +445,14 @@ exports.getStudentsInactive = async (req, res) => {
 
 exports.getAllTurmasWithStudents = async (req, res) => {
     try {
-        const turmas = await Turma.findAll({
-            include: [
-                {
-                    model: Curso,
-                    as: "curso"
+        const turmas = await Turma.findMany({
+            include: {
+                curso: true,
+                alunos: {
+                    orderBy: { nome: "asc" },
                 },
-                {
-                    model: Aluno,
-                    as: "alunos",
-                    include: [
-                        {
-                            model: Turma,
-                            as: "turma",
-                            include: [{ model: Curso, as: "curso" }]
-                        }
-                    ],
-                    order: [["nome", "ASC"]]
-                }
-            ],
-            order: [["nome", "ASC"]]
+            },
+            orderBy: { nome: "asc" },
         });
 
         return res.status(200).json({ turmas });

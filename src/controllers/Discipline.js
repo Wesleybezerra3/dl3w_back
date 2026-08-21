@@ -2,7 +2,7 @@ const { Disciplina } = require("../models");
 
 exports.getAllDiscipline = async (req, res) => {
   try {
-    const disciplinas = await Disciplina.findAll();
+    const disciplinas = await Disciplina.findMany();
     if (disciplinas.length === 0) {
       return res.status(404).json({ message: "Nenhuma disciplina encontrado" });
     }

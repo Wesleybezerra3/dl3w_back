@@ -15,34 +15,15 @@ exports.getClassesAll = async(req, res) => {
             offset = (page - 1) * limit;
         }
 
-        const classes = await Turma.findAll({
-            include: [{
-                    model: Sala,
-                    as: "sala",
-                    attributes: ["id", "nome", "capacidade", "localizacao"],
-                },
-                {
-                    model: Curso,
-                    as: "curso",
-                    attributes: ["id", "nome", "duracao_meses"],
-                },
-                {
-                    model: Aluno,
-                    as: "alunos",
-                    attributes: ["id"],
-                    required: false,
-                },
-            ],
-            limit: Number(limit),
-            offset: Number(offset)
-
+        const classes = await Turma.findMany({
+            include: { sala: { select: { id: true, nome: true, capacidade: true, localizacao: true } }, curso: { select: { id: true, nome: true, duracaoMeses: true } }, _count: { select: { alunos: true } } },
+            take: Number(limit), skip: Number(offset)
         });
 
         // Adiciona a quantidade de alunos em cada turma
         const result = classes.map((turma) => {
-            const turmaJson = turma.toJSON();
-            turmaJson.qtd_alunos = turmaJson.alunos ? turmaJson.alunos.length : 0;
-            delete turmaJson.alunos; // opcional: remove o array de alunos do retorno
+            const { _count, ...turmaJson } = turma;
+            turmaJson.qtd_alunos = _count.alunos;
             return turmaJson;
         });
 
@@ -65,16 +46,7 @@ exports.getTurmasByCurso = async (req, res) => {
             return res.status(400).json({ message: "ID do curso é obrigatório." });
         }
 
-        const turmas = await Turma.findAll({
-            where: { id_curso: id },
-            include: [
-                {
-                    model: Curso,
-                    as: "curso",
-                    attributes: ["id", "nome"]
-                }
-            ]
-        });
+        const turmas = await Turma.findMany({ where: { idCurso: Number(id) }, include: { curso: { select: { id: true, nome: true } } } });
 
         if (!turmas || turmas.length === 0) {
             return res.status(404).json({ message: "Nenhuma turma encontrada para este curso." });

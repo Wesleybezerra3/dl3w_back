@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Adm {
+  id    Int    @id @default(autoincrement())
+  nome  String
+  senha String
+
+  @@map("administrador")
+}
+
+model Aluno {
+  id             Int      @id @default(autoincrement())
+  nome           String
+  senha          String
+  dataNascimento DateTime @map("data_nascimento")
+  cpf            String
+  email          String
+  idTurma        Int?     @map("id_turma")
+  matricula      String   @unique
+  situacao       String?
+  turma          Turma?   @relation(fields: [idTurma], references: [id])
+
+  @@map("aluno")
+}
+
+model Professor {
+  id             Int                   @id @default(autoincrement())
+  nome           String
+  senha          String
+  dataNascimento DateTime?             @map("data_nascimento")
+  cpf            String                @unique
+  email          String                @unique
+  titulacao      String?
+  matricula      String                @unique
+  situacao       String                @default("ativo")
+  disciplinas    ProfessorDisciplina[]
+
+  @@map("professor")
+}
+
+model Curso {
+  id           Int               @id @default(autoincrement())
+  nome         String
+  descricao    String?
+  duracaoMeses Int?              @map("duracao_meses")
+  turmas       Turma[]
+  disciplinas  CursoDisciplina[]
+
+  @@map("curso")
+}
+
+model Turma {
+  id       Int     @id @default(autoincrement())
+  nome     String
+  turno    String
+  idCurso  Int?    @map("id_curso")
+  idSala   Int?    @map("id_sala")
+  semestre String
+  curso    Curso?  @relation(fields: [idCurso], references: [id])
+  sala     Sala?   @relation(fields: [idSala], references: [id])
+  alunos   Aluno[]
+
+  @@map("turma")
+}
+
+model Sala {
+  id          Int     @id @default(autoincrement())
+  nome        String
+  capacidade  Int?
+  localizacao String?
+  turmas      Turma[]
+
+  @@map("sala")
+}
+
+model Disciplina {
+  id           Int                   @id @default(autoincrement())
+  nome         String
+  cargaHoraria Int                   @map("carga_horaria")
+  descricao    String?
+  cursos       CursoDisciplina[]
+  professores  ProfessorDisciplina[]
+
+  @@map("disciplina")
+}
+
+model CursoDisciplina {
+  idCurso      Int        @map("id_curso")
+  idDisciplina Int        @map("id_disciplina")
+  curso        Curso      @relation(fields: [idCurso], references: [id])
+  disciplina   Disciplina @relation(fields: [idDisciplina], references: [id])
+
+  @@id([idCurso, idDisciplina])
+  @@map("curso_disciplina")
+}
+
+model ProfessorDisciplina {
+  idProfessor  Int        @map("id_professor")
+  idDisciplina Int        @map("id_disciplina")
+  professor    Professor  @relation(fields: [idProfessor], references: [id])
+  disciplina   Disciplina @relation(fields: [idDisciplina], references: [id])
+
+  @@id([idProfessor, idDisciplina])
+  @@map("professor_disciplina")
+}

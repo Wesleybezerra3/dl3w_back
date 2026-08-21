@@ -1,6 +1,5 @@
 const { Sala } = require("../models");
 const { Turma } = require("../models");
-const { where, Op } = require("sequelize");
 
 exports.getAllRooms = async(req, res) => {
     try {
@@ -14,17 +13,12 @@ exports.getAllRooms = async(req, res) => {
         }
 
 
-        const rooms = await Sala.findAll({
-            attributes: ["id", "nome", "capacidade", "localizacao"],
-            include: [{
-                model: Turma,
-                as: 'turma'
-            }],
-            limit: Number(limit),
-            offset: Number(offset)
+        const rooms = await Sala.findMany({
+            select: { id: true, nome: true, capacidade: true, localizacao: true, turmas: true },
+            take: Number(limit), skip: Number(offset)
         });
 
-        const totalRooms = await Sala.findAll();
+        const totalRooms = await Sala.count();
 
         if (!rooms || rooms.length === 0) {
             return res.status(404).json({ message: "Nenhuma Sala encontrada" });
@@ -32,7 +26,7 @@ exports.getAllRooms = async(req, res) => {
 
         return res.status(200).json({
             rooms,
-            total_rooms: totalRooms.length
+            total_rooms: totalRooms
         })
     } catch (error) {
         console.error("Erro ao listar turmas:", error);
@@ -74,15 +68,13 @@ exports.searchRooms = async(req, res) => {
 
         // Se o título não for fornecido, retorna todos os salas
         if (!roomName) {
-            salas = await Sala.findAll();
+            salas = await Sala.findMany();
             return res.status(404).json({ message: 'O nome não foi fornecido' });
         } else {
             // Busca salas cujo título contém a string especificada
-            salas = await Sala.findAll({
+            salas = await Sala.findMany({
                 where: {
-                    nome: {
-                        [Op.like]: `%${roomName}%`, // Filtro "contém" com wildcard (%)
-                    },
+                    nome: { contains: roomName },
                 },
             });
         }
@@ -92,7 +84,7 @@ exports.searchRooms = async(req, res) => {
         }
 
         // Converte os resultados em objetos simples
-        const roomData = salas.map((sala) => sala.get({ plain: true }));
+        const roomData = salas;
 
         return res.status(200).json(roomData);
     } catch (err) {
@@ -104,12 +96,9 @@ exports.searchRooms = async(req, res) => {
 exports.getByName = async(req, res) => {
     const name = req.query.name;
     try {
-        const sala = await Sala.findOne({
+        const sala = await Sala.findFirst({
             where: { nome: name },
-            include: [{
-                model: Turma,
-                as: "turma",
-            }, ],
+            include: { turmas: true },
         });
         if (sala) {
             res.status(200).json(sala);
@@ -132,22 +121,20 @@ exports.updateRoom = async(req, res) => {
         }
 
         // Busca o estudante pela matrícula
-        const sala = await Sala.findOne({ where: { id } });
+        const sala = await Sala.findUnique({ where: { id: Number(id) } });
 
         if (!sala) {
             return res.status(404).json({ message: "Estudante não encontrado" });
         }
 
         // Atualizações básicas
-        if (nome) sala.nome = nome;
-        if (localizacao) sala.localizacao = localizacao;
-        if (capacidade) sala.capacidade = capacidade;
-
-        await sala.save();
+        const updated = await Sala.update({ where: { id: Number(id) }, data: {
+            ...(nome ? { nome } : {}), ...(localizacao ? { localizacao } : {}), ...(capacidade ? { capacidade: Number(capacidade) } : {})
+        } });
 
         return res.status(200).json({
             message: "Dados atualizados com sucesso",
-            sala
+            sala: updated
         });
 
     } catch (error) {
@@ -158,7 +145,7 @@ exports.updateRoom = async(req, res) => {
 
 // exports.getClassesAll = async (req, res) => {
 //   try {
-//     const classes = await Turma.findAll({
+//     const classes = await Turma.findMany({
 //       include: [
 //         {
 //           model: Sala,

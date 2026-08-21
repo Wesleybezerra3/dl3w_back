@@ -2,9 +2,8 @@ const { Professor } = require("../models");
 const { Disciplina } = require("../models");
 const { Turma } = require("../models");
 const { Aluno } = require("../models");
-const { Curso } = require("../models");
+const { Curso, prisma } = require("../models");
 
-const { where, Op } = require("sequelize");
 
 const jwt = require("jsonwebtoken");
 
@@ -18,12 +17,7 @@ const generateInitialPassword = require("../utils/passwordInit");
 
 async function generateMatricula() {
     // Busca a maior matrícula já cadastrada
-    const lastTeacher = await Professor.findOne({
-        order: [
-            ["matricula", "DESC"]
-        ],
-        attributes: ["matricula"],
-    });
+    const lastTeacher = await Professor.findFirst({ orderBy: { matricula: "desc" }, select: { matricula: true } });
 
     // Se não existe nenhum aluno, começa em 1
     const lastMatricula = lastTeacher ? parseInt(lastTeacher.matricula, 10) : 0;
@@ -33,7 +27,7 @@ async function generateMatricula() {
 exports.login = async(req, res) => {
     const { matricula, senha } = req.body;
     try {
-        const teacher = await Professor.findOne({ where: { matricula, senha } });
+        const teacher = await Professor.findFirst({ where: { matricula, senha } });
         // if (teacher.situacao === 'Inativo') {
         //     res.status(401).json({ message: 'Professor inativo, não autorizado' })
         // }
@@ -51,24 +45,8 @@ exports.login = async(req, res) => {
 
 exports.me = async(req, res) => {
     try {
-        const user = await Professor.findByPk(req.user.id, {
-            include: [{
-                model: Disciplina,
-                as: "disciplinas",
-                include: [{
-                    model: Curso,
-                    as: "curso",
-                    include: [{
-                        model: Turma,
-                        as: "turmas",
-                        include: [{
-                            model: Aluno,
-                            as: "alunos",
-                        }],
-                    }],
-                }],
-            }],
-        });
+        const user = await Professor.findUnique({ where: { id: Number(req.user.id) }, include: { disciplinas: { include: { disciplina: { include: { cursos: { include: { curso: { include: { turmas: { include: { alunos: true } } } } } } } } } } } });
+        if (user) user.disciplinas = user.disciplinas.map(({ disciplina }) => ({ ...disciplina, curso: disciplina.cursos[0]?.curso }));
 
         if (!user) {
             return res.status(404).json({ error: "Professor não encontrado" });
@@ -133,18 +111,10 @@ exports.getAllTeacher = async(req, res) => {
             offset = (page - 1) * limit;
         }
         // Buscar todos os professores com suas disciplinas
-        const professores = await Professor.findAll({
-            include: [{
-                model: Disciplina,
-                as: "disciplinas",
-                attributes: ["id", "nome", "carga_horaria"],
-                through: { attributes: [] }, // remove tabela pivot da resposta
-            }, ],
-            limit: Number(limit),
-            offset: Number(offset),
-        });
+        const professores = await Professor.findMany({ include: { disciplinas: { include: { disciplina: true } } }, take: Number(limit), skip: Number(offset) });
+        const professoresFormatados = professores.map(({ disciplinas, ...professor }) => ({ ...professor, disciplinas: disciplinas.map(({ disciplina }) => disciplina) }));
 
-        const totalTeachers = await Professor.findAll();
+        const totalTeachers = await Professor.count();
 
         if (professores.length === 0) {
             return res.status(404).json({ message: "Nenhum professor encontrado" });
@@ -152,8 +122,8 @@ exports.getAllTeacher = async(req, res) => {
         // Retornar a lista de professores
 
         res.status(200).json({
-            professores,
-            totalTeachers: totalTeachers.length,
+            professores: professoresFormatados,
+            totalTeachers,
         });
     } catch (error) {
         console.error("Erro ao buscar professores:", error);
@@ -164,15 +134,11 @@ exports.getAllTeacher = async(req, res) => {
 exports.getByMatricula = async(req, res) => {
     const matricula = req.query.matricula;
     try {
-        const teacher = await Professor.findOne({
+        const teacher = await Professor.findFirst({
             where: { matricula: matricula },
-            include: [{
-                model: Disciplina,
-                as: "disciplinas",
-                attributes: ["id", "nome", "carga_horaria"],
-                through: { attributes: [] },
-            }, ],
+            include: { disciplinas: { include: { disciplina: true } } },
         });
+        if (teacher) teacher.disciplinas = teacher.disciplinas.map(({ disciplina }) => disciplina);
         if (teacher) {
             res.status(200).json(teacher);
         } else {
@@ -190,7 +156,7 @@ exports.createTeacher = async(req, res) => {
         const senha = generateInitialPassword();
         const matricula = await generateMatricula();
 
-        const exists = await Professor.findOne({ where: { matricula } });
+        const exists = await Professor.findFirst({ where: { matricula } });
         if (exists) {
             return res
                 .status(400)
@@ -201,7 +167,7 @@ exports.createTeacher = async(req, res) => {
             nome,
             senha,
             cpf,
-            data_nascimento,
+            dataNascimento: data_nascimento ? new Date(data_nascimento) : null,
             email,
             titulacao,
             matricula,
@@ -223,24 +189,18 @@ exports.updateTeacher = async(req, res) => {
         }
 
         // Busca o estudante pela matrícula
-        const professor = await Professor.findOne({ where: { matricula } });
+        const professor = await Professor.findFirst({ where: { matricula } });
 
         if (!professor) {
             return res.status(404).json({ message: "Estudante não encontrado" });
         }
 
         // Atualizações básicas
-        if (nome) professor.nome = nome;
-        if (cpf) professor.cpf = cpf;
-        if (data_nascimento) professor.data_nascimento = data_nascimento;
-        if (email) professor.email = email;
-        if (titulacao) professor.titulacao = titulacao;
-
-        await professor.save();
+        const updatedProfessor = await Professor.update({ where: { matricula }, data: { ...(nome ? { nome } : {}), ...(cpf ? { cpf } : {}), ...(data_nascimento ? { dataNascimento: new Date(data_nascimento) } : {}), ...(email ? { email } : {}), ...(titulacao ? { titulacao } : {}) } });
 
         return res.status(200).json({
             message: "Dados atualizados com sucesso",
-            professor,
+            professor: updatedProfessor,
         });
     } catch (error) {
         console.error("Erro ao atualizar da professor:", error);
@@ -255,14 +215,14 @@ exports.searchTeacher = async(req, res) => {
 
         // Se o título não for fornecido, retorna todos os salas
         if (!teacherName) {
-            teacher = await Sala.findAll();
+            teacher = await Sala.findMany();
             return res.status(404).json({ message: "O nome não foi fornecido" });
         } else {
             // Busca salas cujo título contém a string especificada
-            teacher = await Professor.findAll({
+            teacher = await Professor.findMany({
                 where: {
                     nome: {
-                        [Op.like]: `%${teacherName}%`, // Filtro "contém" com wildcard (%)
+                        contains: teacherName,
                     },
                 },
             });
@@ -273,9 +233,7 @@ exports.searchTeacher = async(req, res) => {
         }
 
         // Converte os resultados em objetos simples
-        const teacherData = teacher.map((professor) =>
-            professor.get({ plain: true })
-        );
+        const teacherData = teacher;
 
         return res.status(200).json(teacherData);
     } catch (err) {
@@ -295,19 +253,19 @@ exports.addDisciplineToTeacher = async(req, res) => {
         }
 
         // Verifica se o professor existe
-        const professor = await Professor.findByPk(id_professor);
+        const professor = await Professor.findUnique({ where: { id: Number(id_professor) } });
         if (!professor) {
             return res.status(404).json({ error: "Professor não encontrado." });
         }
 
         // Verifica se disciplina existe
-        const disciplina = await Disciplina.findByPk(id_disciplina);
+        const disciplina = await Disciplina.findUnique({ where: { id: Number(id_disciplina) } });
         if (!disciplina) {
             return res.status(404).json({ error: "Disciplina não encontrada." });
         }
 
         // Verifica se já está vinculado
-        const isDiscipline = await professor.hasDisciplina(disciplina);
+        const isDiscipline = await prisma.professorDisciplina.findUnique({ where: { idProfessor_idDisciplina: { idProfessor: Number(id_professor), idDisciplina: Number(id_disciplina) } } });
         if (isDiscipline) {
             return res
                 .status(400)
@@ -315,7 +273,7 @@ exports.addDisciplineToTeacher = async(req, res) => {
         }
 
         // Faz vínculo
-        await professor.addDisciplina(disciplina);
+        await prisma.professorDisciplina.create({ data: { idProfessor: Number(id_professor), idDisciplina: Number(id_disciplina) } });
 
         return res.status(201).json({
             message: "Disciplina adicionada ao professor com sucesso!",
@@ -338,18 +296,17 @@ exports.changeStatus = async(req, res) => {
                 .json({ message: "Matrícula e nova situação obrigatórios." });
         }
 
-        const professor = await Professor.findOne({ where: { matricula } });
+        const professor = await Professor.findFirst({ where: { matricula } });
 
         if (!professor) {
             return res.status(404).json({ message: "Professor não encontrado" });
         }
 
-        professor.situacao = situacao;
-        await professor.save();
+        const updatedProfessor = await Professor.update({ where: { matricula }, data: { situacao } });
 
         return res.status(200).json({
             message: "Situação atualizada com sucesso",
-            professor,
+            professor: updatedProfessor,
         });
     } catch (error) {
         console.error("Erro ao alterar situação:", error);
@@ -365,7 +322,7 @@ exports.resetPassword = async(req, res) => {
             return res.status(400).json({ message: "Matrícula é obrigatória." });
         }
 
-        const professor = await Professor.findOne({ where: { matricula } });
+        const professor = await Professor.findFirst({ where: { matricula } });
 
         if (!professor) {
             return res.status(404).json({ message: "Professor não encontrado" });
@@ -375,8 +332,7 @@ exports.resetPassword = async(req, res) => {
         const newPassword = generateInitialPassword();
 
         // Atualiza no banco
-        professor.senha = newPassword;
-        await professor.save();
+        await Professor.update({ where: { matricula }, data: { senha: newPassword } });
 
         return res.status(200).json({
             message: "Senha redefinida com sucesso",

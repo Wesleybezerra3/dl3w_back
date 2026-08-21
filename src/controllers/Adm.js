@@ -1,12 +1,8 @@
-const {Adm} = require('../models');
+const { Adm } = require("../models");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
-const generateToken = (user) => {
-  return jwt.sign({ id: user.id}, process.env.JWT_SECRET, {
-    expiresIn: "24h",
-  });
-};
+const generateToken = (user) => jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "24h" });
 
 exports.login = async (req, res) => {
     const nome = req.body.usuario;
@@ -17,7 +13,7 @@ exports.login = async (req, res) => {
     }
 
     try {
-        const admin = await Adm.findOne({ where: { nome: nome} });
+        const admin = await Adm.findFirst({ where: { nome } });
         if (admin && admin.senha === senha) {
             const token = generateToken(admin);
             res.status(200).json({ message: 'Login realizado com sucesso',token});
@@ -32,7 +28,7 @@ exports.login = async (req, res) => {
 
 exports.me = async(req, res)=>{
     try{
-        const admin = await Adm.findByPk(req.user.id);
+        const admin = await Adm.findUnique({ where: { id: Number(req.user.id) } });
         if(admin){
             res.status(200).json({admin});
         }else{
